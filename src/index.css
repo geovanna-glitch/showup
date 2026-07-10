@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Primary — energetic violet */
+  --color-primary-50: #f5f2ff;
+  --color-primary-100: #ede6ff;
+  --color-primary-200: #dcceff;
+  --color-primary-300: #c2a8ff;
+  --color-primary-400: #a379fb;
+  --color-primary-500: #8b5cf6;
+  --color-primary-600: #7c3aed;
+  --color-primary-700: #6b2bd6;
+  --color-primary-800: #5a24b3;
+  --color-primary-900: #4a1f8f;
+
+  /* Accent — coral */
+  --color-coral-50: #fff3f0;
+  --color-coral-100: #ffe4dd;
+  --color-coral-200: #ffc8ba;
+  --color-coral-300: #ffa290;
+  --color-coral-400: #ff7a59;
+  --color-coral-500: #f95738;
+  --color-coral-600: #e23f22;
+
+  /* Supporting brand hues */
+  --color-magenta-500: #ec4899;
+  --color-magenta-600: #db2777;
+  --color-peach-100: #ffefe0;
+  --color-peach-300: #ffd5a9;
+  --color-peach-400: #ffb088;
+
+  /* Neutrals with a violet undertone */
+  --color-ink-900: #1e1b2e;
+  --color-ink-700: #3f3a55;
+  --color-ink-500: #6e6885;
+  --color-ink-300: #a9a4bc;
+  --color-ink-200: #d4d1e0;
+  --color-ink-100: #eae8f1;
+  --color-ink-50: #f6f5fa;
+  --color-surface: #fdfcff;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}

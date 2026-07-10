@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(echo \"exit code: $?\")",
+      "Bash(npx oxlint *)",
+      "Bash(node /private/tmp/claude-501/-Users-josephlacerra-Documents-showup/f3e9053e-c446-46ae-bf2f-64f2823e1e09/scratchpad/verify-queries.mjs)",
+      "Bash(node -e \"console.log\\(require\\('/Users/josephlacerra/Documents/showup/node_modules/@supabase/supabase-js/package.json'\\).main, '|', require\\('/Users/josephlacerra/Documents/showup/node_modules/@supabase/supabase-js/package.json'\\).module, '|', JSON.stringify\\(require\\('/Users/josephlacerra/Documents/showup/node_modules/@supabase/supabase-js/package.json'\\).exports\\)\\)\")",
+      "Bash(node /Users/josephlacerra/Documents/showup/.verify-queries.mjs)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(npx vite *)",
+      "Bash(echo \"exit=$?\")"
+    ]
+  }
+}
