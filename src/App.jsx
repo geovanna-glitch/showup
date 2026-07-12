@@ -11,9 +11,12 @@ import LogHours from './pages/LogHours.jsx'
 import VerifyIdentity from './pages/VerifyIdentity.jsx'
 import AdminReview from './pages/AdminReview.jsx'
 import AdminOrgApplications from './pages/AdminOrgApplications.jsx'
+import AdminHoursReview from './pages/AdminHoursReview.jsx'
 import SignIn from './pages/SignIn.jsx'
 import Support from './pages/Support.jsx'
 import PostOpportunity from './pages/PostOpportunity.jsx'
+import OrgCheckIn from './pages/OrgCheckIn.jsx'
+import OrgAccountSignup from './pages/OrgAccountSignup.jsx'
 
 export default function App() {
   return (
@@ -24,6 +27,7 @@ export default function App() {
         <Route path="signin" element={<SignIn />} />
         <Route path="organizations" element={<OrgSignup />} />
         <Route path="organizations/apply" element={<OrgApply />} />
+        <Route path="organizations/create-account" element={<OrgAccountSignup />} />
         <Route path="opportunities" element={<Browse />} />
         <Route path="support" element={<Support />} />
         <Route
@@ -59,6 +63,14 @@ export default function App() {
           }
         />
         <Route
+          path="org/opportunities/:id/checkin"
+          element={
+            <ProtectedRoute>
+              <OrgCheckIn />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="admin"
           element={
             <ProtectedRoute>
@@ -71,6 +83,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <AdminOrgApplications />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin/hours"
+          element={
+            <ProtectedRoute>
+              <AdminHoursReview />
             </ProtectedRoute>
           }
         />

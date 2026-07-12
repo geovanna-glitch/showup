@@ -1,36 +1,13 @@
 /*
  * ShowUp — Post a volunteer opportunity (Org dashboard)
  * -------------------------------------------------------
- * Only org users with an active organizations row can reach this page.
- * They fill out the form and the row lands in public.opportunities.
+ * Only org users with an active organizations row can reach this page. They
+ * post opportunities, close them, and open each one's check-in screen.
  *
- * ── Run this SQL once in the Supabase editor ────────────────────────────────
- *
- *   -- Orgs can insert opportunities for their own active organization
- *   drop policy if exists "orgs insert opportunities" on public.opportunities;
- *   create policy "orgs insert opportunities" on public.opportunities
- *     for insert with check (
- *       auth.uid() = (
- *         select owner_id from public.organizations
- *         where id = org_id and status = 'active'
- *       )
- *     );
- *
- *   -- Orgs can read all their own opportunities (open, closed, cancelled)
- *   drop policy if exists "orgs read own opportunities" on public.opportunities;
- *   create policy "orgs read own opportunities" on public.opportunities
- *     for select using (
- *       auth.uid() = (select owner_id from public.organizations where id = org_id)
- *     );
- *
- *   -- Orgs can update (close/cancel) their own opportunities
- *   drop policy if exists "orgs update own opportunities" on public.opportunities;
- *   create policy "orgs update own opportunities" on public.opportunities
- *     for update using (
- *       auth.uid() = (select owner_id from public.organizations where id = org_id)
- *     );
- *
- * ────────────────────────────────────────────────────────────────────────────
+ * If the signed-in org user has no organization yet, we try to claim one:
+ * approving an application creates an unowned organizations row, and
+ * claim_my_organization() links it to the login whose email matches. All
+ * database objects live in supabase/schema.sql.
  */
 
 import { useEffect, useState } from 'react'
@@ -93,7 +70,6 @@ export default function PostOpportunity() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const [profile, setProfile] = useState(null)
   const [org, setOrg] = useState(null)
   const [loadingOrg, setLoadingOrg] = useState(true)
   const [orgError, setOrgError] = useState('')
@@ -129,7 +105,6 @@ export default function PostOpportunity() {
         navigate('/dashboard', { replace: true })
         return
       }
-      setProfile(prof)
 
       // 2. Load the organizations row owned by this user
       const { data: orgRow, error } = await supabase
@@ -143,6 +118,24 @@ export default function PostOpportunity() {
       if (error) {
         setOrgError('Could not load your organization. Please try again.')
       } else if (!orgRow) {
+        // No org yet — maybe their application was just approved. Claiming
+        // links the approved (unowned) organization whose email matches this
+        // login; the email check happens server-side against the verified JWT.
+        const { data: claimedId } = await supabase.rpc('claim_my_organization')
+        if (!active) return
+        if (claimedId) {
+          const { data: claimedOrg } = await supabase
+            .from('organizations')
+            .select('*')
+            .eq('id', claimedId)
+            .maybeSingle()
+          if (!active) return
+          if (claimedOrg) {
+            setOrg(claimedOrg)
+            setLoadingOrg(false)
+            return
+          }
+        }
         setOrgError('no-org')
       } else {
         setOrg(orgRow)
@@ -266,8 +259,10 @@ export default function PostOpportunity() {
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
         <p className="text-2xl font-extrabold text-ink-900">No organization found</p>
         <p className="mt-3 text-ink-700">
-          Your account is set up, but we don't have an organization linked to it yet.
-          Contact us at{' '}
+          Your account is set up, but we don't have an approved organization linked to it yet.
+          If your application was approved, make sure this account uses the{' '}
+          <span className="font-semibold">same email address</span> you applied with. Otherwise,
+          contact us at{' '}
           <a href="mailto:hello@showup.community" className="font-semibold text-primary-600 hover:underline">
             hello@showup.community
           </a>{' '}
@@ -495,14 +490,22 @@ export default function PostOpportunity() {
                   <p className="mt-0.5 text-xs text-ink-500">{opp.spots} spots</p>
                 </div>
                 {opp.status === 'open' && (
-                  <button
-                    type="button"
-                    disabled={closingId === opp.id}
-                    onClick={() => handleClose(opp.id)}
-                    className="shrink-0 rounded-full border border-ink-200 px-3 py-1.5 text-xs font-bold text-ink-600 transition hover:border-coral-300 hover:text-coral-600 disabled:opacity-50"
-                  >
-                    {closingId === opp.id ? 'Closing…' : 'Close'}
-                  </button>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <Link
+                      to={`/org/opportunities/${opp.id}/checkin`}
+                      className="rounded-full bg-primary-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-primary-700"
+                    >
+                      Check-in →
+                    </Link>
+                    <button
+                      type="button"
+                      disabled={closingId === opp.id}
+                      onClick={() => handleClose(opp.id)}
+                      className="rounded-full border border-ink-200 px-3 py-1.5 text-xs font-bold text-ink-600 transition hover:border-coral-300 hover:text-coral-600 disabled:opacity-50"
+                    >
+                      {closingId === opp.id ? 'Closing…' : 'Close'}
+                    </button>
+                  </div>
                 )}
               </li>
             ))}

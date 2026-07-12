@@ -49,6 +49,30 @@ function normalize(row) {
   }
 }
 
+// ── Eligibility ─────────────────────────────────────────────────────────────
+
+// Why the signed-in user can't apply, mirroring the database's can_apply()
+// rules so the button explains itself instead of failing at submit time.
+// Returns null when they're eligible (or when we don't know yet — the
+// database has the final say either way).
+function applyBlocker(opp, viewer) {
+  if (!viewer) return null
+  if (viewer.role === 'org' || viewer.role === 'admin') return 'Volunteer accounts only'
+  if (viewer.role === 'youth' && !opp.youthEligible) return 'Adults only'
+  if (viewer.role === 'adult') {
+    if (!['verified', 'cleared'].includes(viewer.verification_status)) {
+      return 'Finish ID verification to apply'
+    }
+    if (
+      opp.youthContact &&
+      !(viewer.tier === 'youth-contact' && viewer.verification_status === 'cleared')
+    ) {
+      return 'Requires Tier 2 clearance'
+    }
+  }
+  return null
+}
+
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function Browse() {
@@ -58,6 +82,7 @@ export default function Browse() {
 
   const [opps, setOpps] = useState([])
   const [mySignups, setMySignups] = useState(new Set()) // set of opportunity_ids
+  const [viewer, setViewer] = useState(null) // { role, verification_status, tier }
   const [loading, setLoading] = useState(!demoMode)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
@@ -87,7 +112,24 @@ export default function Browse() {
         // No real opportunities yet — show mock cards
         setOpps(mockOpps.map((o) => ({ ...o, isReal: false })))
       } else {
-        setOpps(data.map(normalize))
+        // Live "spots left": subtract active signups from each spot limit.
+        // If the counting function isn't available (migration not run yet),
+        // fall back to showing the full spot count.
+        let takenBy = new Map()
+        try {
+          const { data: counts } = await supabase.rpc('signup_counts', {
+            opp_ids: data.map((r) => r.id),
+          })
+          takenBy = new Map((counts ?? []).map((c) => [c.opportunity_id, Number(c.taken)]))
+        } catch {
+          // degrade gracefully — spotsLeft just shows the configured limit
+        }
+        setOpps(
+          data.map((row) => {
+            const o = normalize(row)
+            return { ...o, spotsLeft: Math.max(o.spots - (takenBy.get(o.id) ?? 0), 0) }
+          }),
+        )
       }
     } catch (e) {
       setError(e.message)
@@ -108,10 +150,22 @@ export default function Browse() {
     if (data) setMySignups(new Set(data.map((s) => s.opportunity_id)))
   }, [user, demoMode])
 
+  // Load the viewer's role/verification so buttons can explain eligibility.
+  const loadViewer = useCallback(async () => {
+    if (!user || demoMode) return
+    const { data } = await supabase
+      .from('profiles')
+      .select('role, verification_status, tier')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (data) setViewer(data)
+  }, [user, demoMode])
+
   useEffect(() => {
     load()
     loadMySignups()
-  }, [load, loadMySignups])
+    loadViewer()
+  }, [load, loadMySignups, loadViewer])
 
   // Derived lists for filters
   const locations = useMemo(
@@ -153,7 +207,12 @@ export default function Browse() {
       if (err) throw err
       setMySignups((prev) => new Set([...prev, opp.id]))
     } catch (e) {
-      window.alert(e.message || 'Could not apply. Please try again.')
+      // The database double-checks eligibility and capacity; an RLS rejection
+      // here means "not eligible or just filled up", not a technical failure.
+      const friendly = /row-level security/i.test(e.message || '')
+        ? 'You aren’t eligible for this opportunity, or it just filled up.'
+        : e.message
+      window.alert(friendly || 'Could not apply. Please try again.')
     } finally {
       setBusyId(null)
     }
@@ -222,6 +281,9 @@ export default function Browse() {
           {filtered.map((opp) => {
             const applied = mySignups.has(opp.id)
             const busy = busyId === opp.id
+            const spotsLeft = opp.spotsLeft ?? opp.spots
+            const full = spotsLeft <= 0
+            const blocker = applyBlocker(opp, viewer)
             return (
               <article
                 key={opp.id}
@@ -254,7 +316,7 @@ export default function Browse() {
                     <svg viewBox="0 0 24 24" className="h-4 w-4 text-ink-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                       <path d="M16 19a4 4 0 0 0-8 0M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7 8a3 3 0 0 0-2-2.8M5 19a3 3 0 0 1 2-2.8" />
                     </svg>
-                    {opp.spots} spots left
+                    {full ? 'Full' : `${spotsLeft} spots left`}
                   </div>
                 </dl>
                 {opp.youthContact && (
@@ -264,15 +326,21 @@ export default function Browse() {
                 )}
                 <button
                   type="button"
-                  disabled={applied || busy}
+                  disabled={applied || busy || full || Boolean(blocker)}
                   onClick={() => apply(opp)}
                   className={`mt-4 rounded-full py-3 text-sm font-bold transition ${
                     applied
                       ? 'bg-primary-50 text-primary-700'
-                      : 'bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60'
+                      : blocker || full
+                        ? 'bg-ink-100 text-ink-500'
+                        : 'bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60'
                   }`}
                 >
-                  {busy ? '…' : applied ? '✓ Applied — see you there!' : 'Apply to volunteer'}
+                  {busy
+                    ? '…'
+                    : applied
+                      ? '✓ Applied — see you there!'
+                      : blocker || (full ? 'Full — check back later' : 'Apply to volunteer')}
                 </button>
               </article>
             )

@@ -156,10 +156,10 @@ export default function VolunteerSignup() {
         </h1>
         <p className="mt-3 leading-relaxed text-ink-700">
           {isYouth
-            ? `We've emailed ${form.parentEmail} to confirm parental consent. Meanwhile, start exploring opportunities near you.`
+            ? `You listed ${form.parentEmail} as your parent or guardian — make sure they know you've signed up, since we may contact them to confirm consent. Meanwhile, start exploring opportunities near you.`
             : form.tier === 'youth-contact'
-              ? 'Your background check is being processed — we’ll email you when you’re cleared for youth-contact opportunities. You can browse and apply to general opportunities right away.'
-              : 'Your ID verification is pending. You can browse and apply to opportunities right away.'}
+              ? 'Next step: verify your ID from your dashboard. Youth-contact opportunities also require a background check before your first shift — our team will reach out to arrange it.'
+              : 'Next step: verify your ID from your dashboard. Once our team approves it, you can apply to opportunities.'}
         </p>
         {!isSupabaseConfigured && (
           <p className="mt-4 rounded-xl bg-peach-100 px-4 py-3 text-sm text-ink-700">

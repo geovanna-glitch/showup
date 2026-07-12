@@ -26,10 +26,16 @@ data so you can click through signup, browsing, and the dashboard.
 ## Connect Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Run `supabase/schema.sql` in the SQL editor (tables, RLS policies, and the trigger that
-   creates a volunteer profile from signup metadata).
+2. Run `supabase/schema.sql` in the SQL editor — it creates every table, RLS policy,
+   storage bucket, and function the app uses (a fresh project needs only this one file).
 3. Copy `.env.example` to `.env.local` and fill in the project URL and anon key from
    Project Settings → API.
+4. Create your admin account: sign up in the app, then in the SQL editor run
+   `update public.profiles set role = 'admin' where email = 'you@example.com';`
+
+**Already-running projects:** don't re-run `schema.sql`. Instead run the files in
+`supabase/migrations/` (each is idempotent — safe to run twice). Latest:
+`2026-07-12_security_and_hours.sql` (security fix + verified-hours pipeline).
 
 ## Deploy to Vercel
 
@@ -50,8 +56,9 @@ environment variables. Add a rewrite so client-side routes work — `vercel.json
 
 ## Roadmap after MVP
 
-- Real auth-gated dashboards (volunteer, organization, admin)
-- Org check-in/check-out flow writing to `hour_logs`
+- Email notifications (parental consent confirmation, approval notices) via an
+  Edge Function + email provider
 - Checkr integration for Tier 2 background checks
 - Stripe billing for organization plans
-- Hour report exports (CSV/PDF) for schools and colleges
+- Volunteer-facing cancel button for signups
+- Terms of service / privacy policy review

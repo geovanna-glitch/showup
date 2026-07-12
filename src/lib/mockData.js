@@ -1,4 +1,4 @@
-// Demo opportunities shown until Supabase is connected and orgs post real ones.
+// Opportunity types for filtering
 export const OPPORTUNITY_TYPES = [
   'Food & Hunger',
   'Environment',
@@ -8,90 +8,5 @@ export const OPPORTUNITY_TYPES = [
   'Community Events',
 ]
 
-export const opportunities = [
-  {
-    id: 1,
-    title: 'Food Pantry Shelf Stocking',
-    org: 'Putnam Community Food Pantry',
-    type: 'Food & Hunger',
-    date: '2026-07-12',
-    time: '9:00 AM – 12:00 PM',
-    location: 'Mahopac, NY',
-    spots: 6,
-    hours: 3,
-    youthEligible: true,
-    description:
-      'Help sort donations and stock shelves before weekend distribution. Great first opportunity — no experience needed.',
-  },
-  {
-    id: 2,
-    title: 'Lake Mahopac Shoreline Cleanup',
-    org: 'Friends of Lake Mahopac',
-    type: 'Environment',
-    date: '2026-07-18',
-    time: '8:30 AM – 11:30 AM',
-    location: 'Lake Mahopac, NY',
-    spots: 20,
-    hours: 3,
-    youthEligible: true,
-    description:
-      'Join a Saturday morning crew picking up litter along the shoreline. Gloves, bags, and bagels provided.',
-  },
-  {
-    id: 3,
-    title: 'Bingo Afternoon at the Senior Center',
-    org: 'Mahopac Senior Center',
-    type: 'Seniors',
-    date: '2026-07-15',
-    time: '1:00 PM – 4:00 PM',
-    location: 'Mahopac, NY',
-    spots: 4,
-    hours: 3,
-    youthEligible: true,
-    description:
-      'Call numbers, hand out prizes, and visit with residents. A favorite among our regular volunteers.',
-  },
-  {
-    id: 4,
-    title: 'Reading Buddies (K–2)',
-    org: 'Mahopac Public Library',
-    type: 'Youth & Education',
-    date: '2026-07-21',
-    time: '3:30 PM – 5:00 PM',
-    location: 'Mahopac, NY',
-    spots: 8,
-    hours: 1.5,
-    youthEligible: true,
-    youthContact: true,
-    description:
-      'Read one-on-one with kindergarten through 2nd graders. Adult volunteers require Tier 2 (youth-contact) clearance.',
-  },
-  {
-    id: 5,
-    title: 'Dog Walking & Kennel Care',
-    org: 'Putnam Humane Society',
-    type: 'Animals',
-    date: '2026-07-19',
-    time: '10:00 AM – 1:00 PM',
-    location: 'Carmel, NY',
-    spots: 5,
-    hours: 3,
-    youthEligible: true,
-    description:
-      'Walk shelter dogs and help with feeding and kennel cleanup. Volunteers under 16 must attend with a parent.',
-  },
-  {
-    id: 6,
-    title: 'Water Station — Community 5K',
-    org: 'Links of Love Inc.',
-    type: 'Community Events',
-    date: '2026-08-02',
-    time: '7:00 AM – 11:00 AM',
-    location: 'Mahopac, NY',
-    spots: 12,
-    hours: 4,
-    youthEligible: true,
-    description:
-      'Set up and run a water station for the annual community 5K. High energy, lots of cheering.',
-  },
-]
+// No demo listings — all opportunities come from real organizations via Supabase
+export const opportunities = []

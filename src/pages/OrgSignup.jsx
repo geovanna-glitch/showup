@@ -92,6 +92,13 @@ export default function OrgSignup() {
           we&apos;ll reach out to <span className="font-semibold">{form.email}</span> within 2
           business days to finish setup. No charges until your account is approved.
         </p>
+        <p className="mt-3 text-sm text-ink-500">
+          Once you&apos;re approved,{' '}
+          <Link to="/organizations/create-account" className="font-semibold text-primary-600 hover:underline">
+            create your account
+          </Link>{' '}
+          with this same email to start posting opportunities.
+        </p>
         {!isSupabaseConfigured && (
           <p className="mt-4 rounded-xl bg-peach-100 px-4 py-3 text-sm text-ink-700">
             Demo mode: connect Supabase to store real applications.

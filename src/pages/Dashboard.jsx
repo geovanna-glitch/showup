@@ -46,11 +46,17 @@ const barGradients = [
   'from-ink-200 to-ink-200',
 ]
 
+// Parse either a full ISO timestamp or a bare 'YYYY-MM-DD'. Bare dates get a
+// local-midnight time so they never shift to the previous day in US timezones.
+function parseDate(iso) {
+  return String(iso).includes('T') ? new Date(iso) : new Date(`${iso}T00:00:00`)
+}
+
 // School year runs July–June: summer hours count toward the coming grade, which
 // matches how the platform frames a student's yearly service total. Returns a
 // label like "2026–27".
 function academicYear(dateStr) {
-  const d = new Date(dateStr)
+  const d = parseDate(dateStr)
   const start = d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1
   return `${start}–${String((start + 1) % 100).padStart(2, '0')}`
 }
@@ -63,7 +69,7 @@ function formatShiftDate(iso) {
 }
 
 function formatLogDate(iso) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return parseDate(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 // Turn a numeric like 127.5 into a clean display value (drops trailing zeros).
@@ -79,15 +85,17 @@ function csvField(value) {
 }
 
 // Build a CSV of the student's hours: verified shifts plus self-logged external
-// hours, one row each. Columns: Date, Organization, Hours, Type, Status.
+// hours, one row each. Reflections ride along so the export satisfies the
+// school district's reporting format on its own.
 function buildHoursCsv(profile) {
-  const header = ['Date', 'Organization', 'Hours', 'Type', 'Status']
+  const header = ['Date', 'Organization', 'Hours', 'Type', 'Status', 'Reflection']
   const verifiedRows = (profile.allVerified ?? profile.recent ?? []).map((r) => [
     r.date,
     r.org || r.title || '',
     r.hours,
     'Verified',
     'Verified',
+    '',
   ])
   const externalRows = (profile.external ?? []).map((r) => [
     r.date,
@@ -95,6 +103,7 @@ function buildHoursCsv(profile) {
     r.hours,
     'Self-Reported',
     r.status ? r.status.charAt(0).toUpperCase() + r.status.slice(1) : 'Pending',
+    r.reflection || '',
   ])
   return [header, ...verifiedRows, ...externalRows]
     .map((row) => row.map(csvField).join(','))
@@ -153,7 +162,7 @@ async function loadDashboard(user) {
       .order('checked_in_at', { ascending: false }),
     supabase
       .from('external_hour_logs')
-      .select('id, org_name, service_date, hours, supervisor_name, status, created_at')
+      .select('id, org_name, service_date, hours, supervisor_name, reflection, status, created_at')
       .eq('user_id', user.id)
       .order('service_date', { ascending: false }),
   ])
@@ -189,15 +198,24 @@ async function loadDashboard(user) {
       date: formatShiftDate(s.opportunities.starts_at),
     }))
 
-  // Verified hours: total, grouped by school year, plus the most recent few.
+  // Verified hours = checked-in/out shifts PLUS approved self-logged entries.
+  // Pending and rejected self-logged hours never count.
   const logs = hoursRes.data ?? []
+  const externalLogs = externalRes.data ?? []
+  const approvedExternal = externalLogs.filter((l) => l.status === 'approved')
+
   const totalHours = round(
-    logs.reduce((sum, l) => sum + Number(l.hours || 0), 0),
+    logs.reduce((sum, l) => sum + Number(l.hours || 0), 0) +
+      approvedExternal.reduce((sum, l) => sum + Number(l.hours || 0), 0),
   )
 
   const byYear = new Map()
   for (const log of logs) {
     const label = academicYear(log.checked_in_at)
+    byYear.set(label, (byYear.get(label) ?? 0) + Number(log.hours || 0))
+  }
+  for (const log of approvedExternal) {
+    const label = academicYear(log.service_date)
     byYear.set(label, (byYear.get(label) ?? 0) + Number(log.hours || 0))
   }
   const hoursByYear = [...byYear.entries()]
@@ -215,12 +233,13 @@ async function loadDashboard(user) {
   const recent = allVerified.slice(0, 5)
 
   // Self-logged external hours (any organization), newest first.
-  const external = (externalRes.data ?? []).map((row) => ({
+  const external = externalLogs.map((row) => ({
     id: row.id,
     org: row.org_name,
     date: formatLogDate(row.service_date),
     hours: round(row.hours, 2),
     supervisor: row.supervisor_name,
+    reflection: row.reflection,
     status: row.status,
   }))
 
@@ -445,9 +464,9 @@ export default function Dashboard() {
       <section className="mt-6 rounded-3xl border border-ink-100 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-ink-900">Pending verification</h2>
+            <h2 className="text-lg font-bold text-ink-900">Self-logged hours</h2>
             <p className="mt-0.5 text-sm text-ink-500">
-              Hours you logged yourself — they count once a reviewer approves them.
+              Hours you logged yourself — approved entries count toward your total above.
             </p>
           </div>
           <Link

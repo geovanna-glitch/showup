@@ -8,18 +8,10 @@
  * Role gate: only users with role = 'admin' in the profiles table may access
  * this page. Everyone else is redirected to /dashboard.
  *
- * ── Supabase RLS ──────────────────────────────────────────────────────────────
- * Admins need read + update access to org_applications. Add these policies in
- * the Supabase SQL editor (uses the is_admin() helper from AdminReview.jsx):
- *
- *   drop policy if exists "admins read org_applications" on public.org_applications;
- *   create policy "admins read org_applications" on public.org_applications
- *     for select using (public.is_admin());
- *
- *   drop policy if exists "admins update org_applications" on public.org_applications;
- *   create policy "admins update org_applications" on public.org_applications
- *     for update using (public.is_admin());
- * ──────────────────────────────────────────────────────────────────────────────
+ * Approving calls approve_org_application(), which flips the status AND
+ * creates the (unowned) organizations row — the org contact then creates a
+ * login at /organizations/create-account with the same email and it links up
+ * automatically. Database objects live in supabase/schema.sql.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -175,14 +167,27 @@ export default function AdminOrgApplications() {
     }
     setBusyId(id)
     try {
-      const { error: updateError } = await supabase
-        .from('org_applications')
-        .update({ status })
-        .eq('id', id)
-      if (updateError) throw updateError
+      if (status === 'approved') {
+        // Approving also creates the organizations row (idempotent — never
+        // duplicates an org), so the contact can claim it with their login.
+        const { error: rpcError } = await supabase.rpc('approve_org_application', { app: id })
+        if (rpcError) throw rpcError
+      } else {
+        const { error: updateError } = await supabase
+          .from('org_applications')
+          .update({ status })
+          .eq('id', id)
+        if (updateError) throw updateError
+      }
       setRows((rs) =>
         rs.map((r) => (r.id === id ? { ...r, status } : r))
       )
+      if (status === 'approved') {
+        window.alert(
+          'Approved! Their organization is now active. Ask them to create their account at ' +
+            `${window.location.origin}/organizations/create-account using the same email they applied with.`,
+        )
+      }
     } catch (err) {
       window.alert(err.message || 'Could not update that application. Please try again.')
     } finally {

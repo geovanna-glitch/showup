@@ -1,68 +1,14 @@
 /*
- * ShowUp — External hours logging (Task 3)
- * ----------------------------------------
+ * ShowUp — External hours logging
+ * -------------------------------
  * Students self-log volunteer hours served with ANY organization (not just
  * Links of Love). Each submission carries a photo of the supervisor-signed
- * paper as the verification artifact, and lands as `pending` until a verifier
- * approves it.
+ * paper plus a written reflection (Mahopac CSD requires one with logged
+ * hours), and lands as `pending` until an admin approves it on /admin/hours.
  *
- * ── Run this migration once in the Supabase SQL editor ──────────────────────
- * It is idempotent, so re-running it is safe.
- *
- *   -- 1. Table: one row per self-logged external service entry
- *   create table if not exists public.external_hour_logs (
- *     id uuid primary key default gen_random_uuid(),
- *     user_id uuid not null references auth.users on delete cascade,
- *     org_name text not null,
- *     service_date date not null,
- *     hours numeric(5, 2) not null check (hours > 0 and hours <= 24),
- *     supervisor_name text not null,
- *     photo_url text,
- *     status text not null default 'pending'
- *       check (status in ('pending', 'approved', 'rejected')),
- *     created_at timestamptz not null default now()
- *   );
- *
- *   create index if not exists external_hour_logs_user_idx
- *     on public.external_hour_logs (user_id, created_at desc);
- *
- *   alter table public.external_hour_logs enable row level security;
- *
- *   -- Students may read only their own rows...
- *   drop policy if exists "read own external hours" on public.external_hour_logs;
- *   create policy "read own external hours" on public.external_hour_logs
- *     for select using (auth.uid() = user_id);
- *
- *   -- ...and insert only rows attributed to themselves. There is deliberately
- *   -- NO update/delete policy: a student must not be able to flip their own
- *   -- status to 'approved' (that's a verifier action via the service role).
- *   drop policy if exists "insert own external hours" on public.external_hour_logs;
- *   create policy "insert own external hours" on public.external_hour_logs
- *     for insert with check (auth.uid() = user_id);
- *
- *   -- 2. Private Storage bucket for the signed-paper photos
- *   insert into storage.buckets (id, name, public)
- *   values ('hour-verification-photos', 'hour-verification-photos', false)
- *   on conflict (id) do nothing;
- *
- *   -- Each student uploads into a folder named after their own uid, and can
- *   -- only read back what they uploaded. Verifiers use the service role.
- *   drop policy if exists "upload own hour photos" on storage.objects;
- *   create policy "upload own hour photos" on storage.objects
- *     for insert to authenticated
- *     with check (
- *       bucket_id = 'hour-verification-photos'
- *       and (storage.foldername(name))[1] = auth.uid()::text
- *     );
- *
- *   drop policy if exists "read own hour photos" on storage.objects;
- *   create policy "read own hour photos" on storage.objects
- *     for select to authenticated
- *     using (
- *       bucket_id = 'hour-verification-photos'
- *       and (storage.foldername(name))[1] = auth.uid()::text
- *     );
- * ────────────────────────────────────────────────────────────────────────────
+ * Database objects live in supabase/schema.sql; the reflection column and
+ * admin review policies are added by
+ * supabase/migrations/2026-07-12_security_and_hours.sql.
  */
 
 import { useEffect, useState } from 'react'
@@ -78,6 +24,7 @@ const initialForm = {
   serviceDate: '',
   hours: '',
   supervisorName: '',
+  reflection: '',
 }
 
 const inputClass =
@@ -178,6 +125,7 @@ export default function LogHours() {
     if (!form.hours || Number.isNaN(hours) || hours <= 0) return 'Please enter how many hours you served.'
     if (hours > 24) return 'Hours must be 24 or fewer for a single entry.'
     if (!form.supervisorName.trim()) return 'Please enter your supervisor’s name.'
+    if (!form.reflection.trim()) return 'Please write a short reflection about your service.'
     if (!photo) return 'Please attach a photo of your supervisor-signed sheet.'
     return ''
   }
@@ -218,6 +166,7 @@ export default function LogHours() {
         service_date: form.serviceDate,
         hours: Number(form.hours),
         supervisor_name: form.supervisorName.trim(),
+        reflection: form.reflection.trim(),
         photo_url: path,
         // status defaults to 'pending' in the DB.
       })
@@ -351,6 +300,18 @@ export default function LogHours() {
             onChange={set('supervisorName')}
             placeholder="Ms. Rivera"
             autoComplete="name"
+          />
+        </Field>
+
+        <Field
+          label="Your reflection"
+          hint="A few sentences about what you did and what you took away from it. Mahopac CSD asks for a reflection with every service entry."
+        >
+          <textarea
+            className={`${inputClass} min-h-[110px] resize-y`}
+            value={form.reflection}
+            onChange={set('reflection')}
+            placeholder="What did you do? Who did it help? What did you learn?"
           />
         </Field>
 

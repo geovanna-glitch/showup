@@ -14,6 +14,7 @@ const navLinks = [
 // Internal admin tools — only surfaced to signed-in users with role 'admin'.
 const adminLinks = [
   { to: '/admin', label: 'ID Review' },
+  { to: '/admin/hours', label: 'Hours Review' },
   { to: '/admin/org-applications', label: 'Org Applications' },
 ]
 
@@ -34,7 +35,9 @@ export default function Layout() {
   // no backend, so there is never an admin session there.
   useEffect(() => {
     if (!isSupabaseConfigured || !user) {
+      // Reset BOTH flags so role-gated nav links disappear on sign-out.
       setIsAdmin(false)
+      setIsOrg(false)
       return
     }
 
@@ -46,9 +49,9 @@ export default function Layout() {
       .maybeSingle()
       .then(({ data, error }) => {
         if (active) {
-        setIsAdmin(!error && data?.role === 'admin')
-        setIsOrg(!error && data?.role === 'org')
-      }
+          setIsAdmin(!error && data?.role === 'admin')
+          setIsOrg(!error && data?.role === 'org')
+        }
       })
 
     return () => {

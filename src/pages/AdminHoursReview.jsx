@@ -1,14 +1,13 @@
 /*
- * ShowUp — Admin identity review (internal tool)
- * ----------------------------------------------
- * Admins (role 'admin') review adults who have submitted an ID photo and are
- * still 'pending'. For each: view the ID (via a short-lived signed URL), check
- * the NY Sex Offender Registry, then Approve (→ 'verified') or Flag (→ 'rejected').
+ * ShowUp — Admin: self-logged hours review (internal tool)
+ * --------------------------------------------------------
+ * Admins review the external hours students log on /log-hours. Each entry
+ * carries a photo of the supervisor-signed sheet and the student's written
+ * reflection. Approve (→ 'approved', hours count toward the student's total)
+ * or Reject (→ 'rejected').
  *
- * This is a deliberately plain internal tool, not a polished page.
- *
- * Database objects (admin policies, is_admin() helper, the admin storage-read
- * policy that makes "View ID photo" work) live in supabase/schema.sql and
+ * Requires the admin policies on external_hour_logs and the admin storage
+ * read policy on the 'hour-verification-photos' bucket — both created by
  * supabase/migrations/2026-07-12_security_and_hours.sql.
  */
 
@@ -16,49 +15,49 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext.jsx'
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js'
-import { ID_PHOTO_BUCKET } from './VerifyIdentity.jsx'
+import { PHOTO_BUCKET } from './LogHours.jsx'
 
 // Demo rows so the tool is previewable before Supabase is connected.
 const demoPending = [
   {
-    id: 'demo-a1',
-    first_name: 'Daniel',
-    last_name: 'Okafor',
-    email: 'daniel.okafor@example.com',
-    created_at: '2026-07-07T14:12:00Z',
-    id_photo_url: 'demo-a1/license.jpg',
+    id: 'demo-h1',
+    studentName: 'Maya Rodriguez',
+    studentGrade: '11th',
+    org_name: 'St. John’s Soup Kitchen',
+    service_date: '2026-07-04',
+    hours: 4,
+    supervisor_name: 'Deacon Ruiz',
+    reflection:
+      'I helped serve lunch to about 60 people. It made me realize how many families in our own town rely on the kitchen every week.',
+    photo_url: 'demo/signed-sheet.jpg',
+    created_at: '2026-07-05T10:00:00Z',
   },
   {
-    id: 'demo-a2',
-    first_name: 'Priya',
-    last_name: 'Menon',
-    email: 'priya.menon@example.com',
-    created_at: '2026-07-08T09:40:00Z',
-    id_photo_url: 'demo-a2/passport.jpg',
+    id: 'demo-h2',
+    studentName: 'Ethan Park',
+    studentGrade: '10th',
+    org_name: 'Carmel Animal Shelter',
+    service_date: '2026-06-21',
+    hours: 2.5,
+    supervisor_name: 'K. Byrne',
+    reflection:
+      'I walked dogs and cleaned kennels. The staff taught me how much daily work goes into caring for surrendered animals.',
+    photo_url: 'demo/signed-sheet-2.jpg',
+    created_at: '2026-06-22T15:30:00Z',
   },
 ]
 
-function formatSubmitted(iso) {
+function formatServiceDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-US', {
+  // 'YYYY-MM-DD' parsed as local time so the date never shifts a day.
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   })
 }
 
-// Pre-fill the NY registry search with the applicant's name where the form
-// accepts it via query params; if it ignores them, the page still opens.
-function registryUrl(first, last) {
-  const base = 'https://www.criminaljustice.ny.gov/SomsSUBDirectory/search.jsp'
-  const params = new URLSearchParams()
-  if (first) params.set('firstName', first)
-  if (last) params.set('lastName', last)
-  const query = params.toString()
-  return query ? `${base}?${query}` : base
-}
-
-export default function AdminReview() {
+export default function AdminHoursReview() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -76,15 +75,40 @@ export default function AdminReview() {
     setError('')
     try {
       const { data, error: queryError } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, email, created_at, id_photo_url')
-        .eq('verification_status', 'pending')
-        .not('id_photo_url', 'is', null)
+        .from('external_hour_logs')
+        .select('id, user_id, org_name, service_date, hours, supervisor_name, reflection, photo_url, created_at')
+        .eq('status', 'pending')
         .order('created_at', { ascending: true })
       if (queryError) throw queryError
-      setRows(data ?? [])
+
+      const logs = data ?? []
+
+      // external_hour_logs points at auth.users, not profiles, so PostgREST
+      // can't join the student's name — fetch the matching profiles separately
+      // and merge. Failing that (e.g. policy missing), show entries anonymously
+      // rather than showing nothing.
+      const userIds = [...new Set(logs.map((l) => l.user_id))]
+      let profileById = new Map()
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, grade, school')
+          .in('id', userIds)
+        profileById = new Map((profiles ?? []).map((p) => [p.id, p]))
+      }
+
+      setRows(
+        logs.map((log) => {
+          const p = profileById.get(log.user_id)
+          return {
+            ...log,
+            studentName: p ? `${p.first_name} ${p.last_name}`.trim() : '(name unavailable)',
+            studentGrade: p?.grade ?? '',
+          }
+        }),
+      )
     } catch (err) {
-      setError(err.message || 'Could not load pending reviews.')
+      setError(err.message || 'Could not load pending hours.')
     } finally {
       setLoading(false)
     }
@@ -121,14 +145,14 @@ export default function AdminReview() {
     }
   }, [demoMode, user, navigate, load])
 
-  // Open the ID photo in a new tab via a short-lived signed URL (private bucket).
+  // Open the signed-sheet photo in a new tab via a short-lived signed URL.
   async function viewPhoto(path) {
     if (demoMode) {
-      window.alert('Demo mode: connect Supabase to view the uploaded ID photo.')
+      window.alert('Demo mode: connect Supabase to view the uploaded photo.')
       return
     }
     const { data, error: signError } = await supabase.storage
-      .from(ID_PHOTO_BUCKET)
+      .from(PHOTO_BUCKET)
       .createSignedUrl(path, 60)
     if (signError || !data?.signedUrl) {
       window.alert('Could not open that photo. It may have been removed.')
@@ -145,14 +169,14 @@ export default function AdminReview() {
     setBusyId(id)
     try {
       const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ verification_status: status })
+        .from('external_hour_logs')
+        .update({ status })
         .eq('id', id)
       if (updateError) throw updateError
       // Drop the row — it no longer matches the pending filter.
       setRows((rs) => rs.filter((r) => r.id !== id))
     } catch (err) {
-      window.alert(err.message || 'Could not update that account. Please try again.')
+      window.alert(err.message || 'Could not update that entry. Please try again.')
     } finally {
       setBusyId(null)
     }
@@ -165,7 +189,7 @@ export default function AdminReview() {
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold tracking-tight text-ink-900 sm:text-3xl">
-          Identity review
+          Hours review
         </h1>
         {!demoMode && (
           <button
@@ -178,7 +202,8 @@ export default function AdminReview() {
         )}
       </div>
       <p className="mt-2 text-sm text-ink-500">
-        Adults awaiting approval. Review their ID and the registry, then approve or flag.
+        Hours students logged themselves. Check the signed sheet and reflection, then approve or
+        reject. Approved hours count toward the student&apos;s total right away.
       </p>
 
       {demoMode && (
@@ -196,40 +221,54 @@ export default function AdminReview() {
       ) : (
         <ul className="mt-6 space-y-4">
           {rows.map((row) => {
-            const name = `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || '(no name)'
             const busy = busyId === row.id
             return (
               <li key={row.id} className="rounded-3xl border border-ink-100 bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="font-bold text-ink-900">{name}</p>
-                    <p className="truncate text-sm text-ink-500">{row.email ?? '—'}</p>
-                    <p className="mt-1 text-xs text-ink-500">
-                      Submitted {formatSubmitted(row.created_at)}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-ink-900">
+                      {row.studentName}
+                      {row.studentGrade && (
+                        <span className="ml-2 text-sm font-semibold text-ink-500">
+                          {row.studentGrade} grade
+                        </span>
+                      )}
                     </p>
+                    <p className="mt-1 text-sm text-ink-700">
+                      <span className="font-semibold">{row.org_name}</span>
+                      {' · '}
+                      {formatServiceDate(row.service_date)}
+                      {' · '}
+                      <span className="font-semibold">{row.hours} hrs</span>
+                      {' · '}
+                      Supv. {row.supervisor_name}
+                    </p>
+
+                    {row.reflection && (
+                      <blockquote className="mt-3 rounded-2xl bg-ink-50 px-4 py-3 text-sm leading-relaxed text-ink-700">
+                        “{row.reflection}”
+                      </blockquote>
+                    )}
+
                     <div className="mt-3 flex flex-wrap gap-4 text-sm font-bold">
-                      <button
-                        type="button"
-                        onClick={() => viewPhoto(row.id_photo_url)}
-                        className="text-primary-600 hover:underline"
-                      >
-                        View ID photo →
-                      </button>
-                      <a
-                        href={registryUrl(row.first_name, row.last_name)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary-600 hover:underline"
-                      >
-                        Check NY Sex Offender Registry →
-                      </a>
+                      {row.photo_url ? (
+                        <button
+                          type="button"
+                          onClick={() => viewPhoto(row.photo_url)}
+                          className="text-primary-600 hover:underline"
+                        >
+                          View signed sheet →
+                        </button>
+                      ) : (
+                        <span className="font-semibold text-coral-600">No photo attached</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-2">
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => setStatus(row.id, 'verified')}
+                      onClick={() => setStatus(row.id, 'approved')}
                       className="rounded-full bg-primary-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-primary-700 disabled:opacity-60"
                     >
                       {busy ? '…' : 'Approve'}
@@ -240,7 +279,7 @@ export default function AdminReview() {
                       onClick={() => setStatus(row.id, 'rejected')}
                       className="rounded-full border border-coral-300 px-5 py-2.5 text-sm font-bold text-coral-600 transition hover:bg-coral-50 disabled:opacity-60"
                     >
-                      Flag
+                      Reject
                     </button>
                   </div>
                 </div>

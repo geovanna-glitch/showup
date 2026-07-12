@@ -8,37 +8,8 @@
  *
  * Students (role 'youth') never see this — their flow is unchanged.
  *
- * ── Run this migration once in the Supabase SQL editor ──────────────────────
- * It is idempotent, so re-running it is safe.
- *
- *   -- 1. Column: where the uploaded ID photo lives (a private Storage path).
- *   alter table public.profiles
- *     add column if not exists id_photo_url text;
- *
- *   -- 2. Private Storage bucket for the ID photos.
- *   insert into storage.buckets (id, name, public)
- *   values ('volunteer-id-photos', 'volunteer-id-photos', false)
- *   on conflict (id) do nothing;
- *
- *   -- Each adult uploads into a folder named after their own uid and can only
- *   -- read back what they uploaded. Admins use the service role (or a signed
- *   -- URL minted server-side) to view any photo during review.
- *   drop policy if exists "upload own id photo" on storage.objects;
- *   create policy "upload own id photo" on storage.objects
- *     for insert to authenticated
- *     with check (
- *       bucket_id = 'volunteer-id-photos'
- *       and (storage.foldername(name))[1] = auth.uid()::text
- *     );
- *
- *   drop policy if exists "read own id photo" on storage.objects;
- *   create policy "read own id photo" on storage.objects
- *     for select to authenticated
- *     using (
- *       bucket_id = 'volunteer-id-photos'
- *       and (storage.foldername(name))[1] = auth.uid()::text
- *     );
- * ────────────────────────────────────────────────────────────────────────────
+ * Database objects (id_photo_url column, private volunteer-id-photos bucket,
+ * upload/read storage policies) live in supabase/schema.sql.
  */
 
 import { useEffect, useState } from 'react'
@@ -141,12 +112,13 @@ export default function VerifyIdentity() {
         .upload(path, photo, { contentType: photo.type, upsert: false })
       if (uploadError) throw uploadError
 
-      // 2. Record the object PATH on the profile (bucket is private; admins mint
-      //    short-lived signed URLs to view it). We also re-assert 'pending' to
-      //    confirm the submission landed — status is flipped by an admin later.
+      // 2. Record the object PATH on the profile (bucket is private; admins
+      //    mint short-lived signed URLs to view it). Only id_photo_url is
+      //    written — verification_status is a protected column that only an
+      //    admin may change (see protect_profile_columns in schema.sql).
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ id_photo_url: path, verification_status: 'pending' })
+        .update({ id_photo_url: path })
         .eq('id', user.id)
       if (updateError) {
         // Best-effort: don't leave an orphaned photo if the update failed.
@@ -178,8 +150,8 @@ export default function VerifyIdentity() {
           You&apos;re on the list 🎉
         </h1>
         <p className="mt-3 leading-relaxed text-ink-700">
-          We&apos;ll review your ID and activate your account within 24 hours. You&apos;ll
-          get an email when you&apos;re ready to go.
+          We&apos;ll review your ID and activate your account within 24 hours. Check your
+          dashboard — the pending banner disappears as soon as you&apos;re approved.
         </p>
         {demoMode && (
           <p className="mt-4 rounded-xl bg-peach-100 px-4 py-3 text-sm text-ink-700">
