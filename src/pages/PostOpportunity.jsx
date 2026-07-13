@@ -1,10 +1,12 @@
 /*
  * ShowUp — Post a volunteer opportunity (Org dashboard)
  * -------------------------------------------------------
- * Only org users with an active organizations row can reach this page. They
- * post opportunities, close them, and open each one's check-in screen.
+ * Org users — and admins who run an organization themselves (Geovanna posts
+ * for Links of Love) — post opportunities, close them, and open each one's
+ * check-in screen. Ownership of the organizations row, not the role, is what
+ * the database checks on every write.
  *
- * If the signed-in org user has no organization yet, we try to claim one:
+ * If the signed-in user has no organization yet, we try to claim one:
  * approving an application creates an unowned organizations row, and
  * claim_my_organization() links it to the login whose email matches. All
  * database objects live in supabase/schema.sql.
@@ -91,7 +93,7 @@ export default function PostOpportunity() {
     setLoadingOrg(true)
 
     ;(async () => {
-      // 1. Confirm role is 'org'
+      // 1. Confirm role is 'org' or 'admin' (admins can run an org of their own)
       const { data: prof } = await supabase
         .from('profiles')
         .select('role, first_name, last_name')
@@ -100,8 +102,8 @@ export default function PostOpportunity() {
 
       if (!active) return
 
-      if (!prof || prof.role !== 'org') {
-        // Not an org — send them to their dashboard
+      if (!prof || (prof.role !== 'org' && prof.role !== 'admin')) {
+        // Volunteers can't post — send them to their dashboard
         navigate('/dashboard', { replace: true })
         return
       }

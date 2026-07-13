@@ -103,7 +103,7 @@ export default function Layout() {
                   {link.label}
                 </NavLink>
               ))}
-            {isOrg && (
+            {(isOrg || isAdmin) && (
               <NavLink
                 to="/org/post"
                 className={({ isActive }) =>
@@ -193,7 +193,7 @@ export default function Layout() {
                   {link.label}
                 </NavLink>
               ))}
-            {isOrg && (
+            {(isOrg || isAdmin) && (
               <NavLink
                 to="/org/post"
                 onClick={() => setMenuOpen(false)}
