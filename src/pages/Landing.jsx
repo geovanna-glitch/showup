@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LogoMark } from '../components/Logo.jsx'
+import { supabase, isSupabaseConfigured } from '../lib/supabase.js'
 
 const steps = [
   {
@@ -39,7 +41,85 @@ const safetyTiers = [
   },
 ]
 
+// The three-beat pitch shown as dark tiles in the hero's right column.
+const heroSteps = [
+  {
+    number: '01',
+    label: 'Find it',
+    description: 'Browse local opportunities and apply with one tap.',
+    icon: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </>
+    ),
+  },
+  {
+    number: '02',
+    label: 'Show up',
+    description: 'Check in on-site — your time is tracked for you.',
+    icon: <path d="M9 12.5l2 2 4.5-5M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />,
+  },
+  {
+    number: '03',
+    label: 'Get credit',
+    description: 'Verified hours land in your portfolio automatically.',
+    icon: (
+      <path d="m12 3 2.7 5.6 6.1.8-4.5 4.3 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8L12 3Z" />
+    ),
+  },
+]
+
+/**
+ * Community impact counters for the hero. Reads the public_stats() database
+ * function (aggregate counts only — it exposes no personal data). Anything
+ * short of a clean answer — demo mode, function not created yet, network
+ * error — resolves to zeros so the hero never breaks.
+ */
+function useCommunityStats() {
+  const [stats, setStats] = useState(null) // null = still loading
+
+  useEffect(() => {
+    let active = true
+    const zeros = { hours: 0, students: 0, orgs: 0 }
+
+    if (!isSupabaseConfigured) {
+      setStats(zeros)
+      return
+    }
+
+    supabase
+      .rpc('public_stats')
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          setStats(zeros)
+          return
+        }
+        const row = Array.isArray(data) ? data[0] : data
+        setStats({
+          hours: Math.round(Number(row?.hours_logged ?? 0)),
+          students: Number(row?.student_volunteers ?? 0),
+          orgs: Number(row?.organizations ?? 0),
+        })
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  return stats
+}
+
 export default function Landing() {
+  const stats = useCommunityStats()
+  const heroStats = [
+    { label: 'Hours Logged', value: stats?.hours },
+    { label: 'Student Volunteers', value: stats?.students },
+    { label: 'Organizations', value: stats?.orgs },
+  ]
+
   return (
     <div>
       {/* Hero */}
@@ -48,7 +128,7 @@ export default function Landing() {
           aria-hidden="true"
           className="absolute inset-0 bg-gradient-to-br from-primary-50 via-surface to-coral-50"
         />
-        <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-14 sm:px-6 sm:pb-24 sm:pt-20">
+        <div className="relative mx-auto grid max-w-6xl gap-12 px-4 pb-16 pt-14 sm:px-6 sm:pb-24 sm:pt-20 md:grid-cols-2 md:items-center">
           <div className="max-w-2xl">
             <p className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-primary-700">
               Mahopac, New York
@@ -80,6 +160,58 @@ export default function Landing() {
             <p className="mt-4 text-sm text-ink-500">
               Free for volunteers, always. Built for grades 9–12, open to everyone.
             </p>
+          </div>
+
+          {/* Right column: the three-beat pitch plus live community counters.
+              min-w-0 lets the grid column shrink below its content's natural
+              width on small screens instead of overflowing the viewport. */}
+          <div className="flex min-w-0 flex-col gap-6">
+            <div className="flex flex-col gap-4">
+              {heroSteps.map((step) => (
+                <div
+                  key={step.number}
+                  className="bg-surface-dark rounded-xl p-4 flex items-center gap-4 border border-white/10 shadow-lg shadow-ink-900/10"
+                >
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E8553E]/15">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-6 w-6 text-[#E8553E]"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      {step.icon}
+                    </svg>
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-white">
+                      <span className="mr-2 text-sm font-extrabold text-[#E8553E]">{step.number}</span>
+                      {step.label}
+                    </p>
+                    <p className="mt-0.5 text-sm text-white/60">{step.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 mt-2">
+              {heroStats.map((stat) => (
+                <div key={stat.label} className="text-center">
+                  {stats === null ? (
+                    <div className="mx-auto h-9 w-16 animate-pulse rounded-lg bg-ink-100" />
+                  ) : (
+                    <p className="text-3xl font-extrabold text-[#E8553E]">
+                      {Number(stat.value ?? 0).toLocaleString()}
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-ink-500">
+                    {stat.label}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

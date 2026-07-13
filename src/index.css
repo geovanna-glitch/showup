@@ -31,6 +31,9 @@
   --color-peach-300: #ffd5a9;
   --color-peach-400: #ffb088;
 
+  /* Dark card surface used on the landing hero tiles */
+  --color-surface-dark: #1a1a2e;
+
   /* Neutrals with a violet undertone */
   --color-ink-900: #1e1b2e;
   --color-ink-700: #3f3a55;
