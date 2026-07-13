@@ -51,7 +51,7 @@ export default function Landing() {
         <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-14 sm:px-6 sm:pb-24 sm:pt-20">
           <div className="max-w-2xl">
             <p className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-primary-700">
-              Now piloting in Mahopac, NY
+              Mahopac, New York
             </p>
             <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-tight text-ink-900 sm:text-6xl">
               Show up for your community.

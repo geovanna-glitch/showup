@@ -171,7 +171,7 @@ export default function OrgSignup() {
         ))}
       </div>
       <p className="mt-3 text-sm text-ink-500">
-        Pilot program: Mahopac-area organizations get their first 3 months free.
+        Mahopac-area organizations get their first 3 months free.
       </p>
 
       {/* Application form */}
