@@ -78,11 +78,21 @@ create table public.opportunities (
   org_id uuid not null references public.organizations on delete cascade,
   title text not null,
   description text,
+  duties text, -- what volunteers will actually do
   type text not null,
-  location text not null,
+  location text not null, -- town, e.g. "Mahopac, NY"
+  address text, -- street address
+  address_detail text, -- floor / room / building
   starts_at timestamptz not null,
   ends_at timestamptz not null,
+  arrive_by timestamptz, -- volunteers' "be there by" (often before the public start)
   spots int not null default 10,
+  supervisor_name text, -- who volunteers report to that day
+  supervisor_phone text, -- parents can call with questions
+  what_to_bring text,
+  food_provided boolean not null default false,
+  food_sponsor text, -- only meaningful when food_provided
+  accessibility_notes text,
   youth_eligible boolean not null default true,
   youth_contact boolean not null default false, -- adults need Tier 2 clearance
   status text not null default 'open' check (status in ('open', 'closed', 'cancelled')),

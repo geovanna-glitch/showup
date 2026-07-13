@@ -9,7 +9,9 @@
  * If the signed-in user has no organization yet, we try to claim one:
  * approving an application creates an unowned organizations row, and
  * claim_my_organization() links it to the login whose email matches. All
- * database objects live in supabase/schema.sql.
+ * database objects live in supabase/schema.sql; the event-detail columns
+ * (arrive_by, address, supervisor, duties, food, accessibility) come from
+ * supabase/migrations/2026-07-12_opportunity_details.sql.
  */
 
 import { useEffect, useState } from 'react'
@@ -58,12 +60,22 @@ function formatDateTime(iso) {
 
 const blankForm = {
   title: '',
-  description: '',
   type: OPPORTUNITY_TYPES[0],
+  duties: '',
+  description: '',
   location: '',
+  address: '',
+  address_detail: '',
   starts_at: '',
   ends_at: '',
+  arrive_by: '',
   spots: 10,
+  supervisor_name: '',
+  supervisor_phone: '',
+  what_to_bring: '',
+  food_provided: false,
+  food_sponsor: '',
+  accessibility_notes: '',
   youth_eligible: true,
   youth_contact: false,
 }
@@ -179,12 +191,18 @@ export default function PostOpportunity() {
 
   function validate() {
     if (!form.title.trim()) return 'Add a title for this opportunity.'
-    if (!form.location.trim()) return 'Add a location.'
+    if (!form.duties.trim()) return 'Describe what volunteers will be doing.'
+    if (!form.location.trim()) return 'Add the town (e.g. Mahopac, NY).'
+    if (!form.address.trim()) return 'Add the street address.'
     if (!form.starts_at) return 'Set a start date and time.'
     if (!form.ends_at) return 'Set an end date and time.'
     if (new Date(form.ends_at) <= new Date(form.starts_at))
       return 'End time must be after start time.'
+    if (form.arrive_by && new Date(form.arrive_by) > new Date(form.starts_at))
+      return 'Volunteer arrival time should be at or before the event start.'
     if (!form.spots || form.spots < 1) return 'Spots must be at least 1.'
+    if (!form.supervisor_name.trim()) return 'Add the day-of supervisor’s name.'
+    if (!form.supervisor_phone.trim()) return 'Add the supervisor’s phone number.'
     return null
   }
 
@@ -202,12 +220,23 @@ export default function PostOpportunity() {
       .insert({
         org_id: org.id,
         title: form.title.trim(),
-        description: form.description.trim() || null,
         type: form.type,
+        duties: form.duties.trim(),
+        description: form.description.trim() || null,
         location: form.location.trim(),
+        address: form.address.trim(),
+        address_detail: form.address_detail.trim() || null,
         starts_at: new Date(form.starts_at).toISOString(),
         ends_at: new Date(form.ends_at).toISOString(),
+        arrive_by: form.arrive_by ? new Date(form.arrive_by).toISOString() : null,
         spots: Number(form.spots),
+        supervisor_name: form.supervisor_name.trim(),
+        supervisor_phone: form.supervisor_phone.trim(),
+        what_to_bring: form.what_to_bring.trim() || null,
+        food_provided: form.food_provided,
+        // Sponsor only means something when food is provided.
+        food_sponsor: form.food_provided ? form.food_sponsor.trim() || null : null,
+        accessibility_notes: form.accessibility_notes.trim() || null,
         youth_eligible: form.youth_eligible,
         youth_contact: form.youth_contact,
         status: 'open',
@@ -353,12 +382,21 @@ export default function PostOpportunity() {
           />
         </Field>
 
+        <Field label="Duties" hint="What will volunteers actually be doing? Shown to volunteers before they apply.">
+          <textarea
+            className={`${inputClass} min-h-[80px] resize-y`}
+            value={form.duties}
+            onChange={(e) => set('duties', e.target.value)}
+            placeholder="Set up tables, greet guests, serve food, help with cleanup…"
+          />
+        </Field>
+
         <Field label="Description (optional)">
           <textarea
             className={`${inputClass} min-h-[96px] resize-y`}
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
-            placeholder="What will volunteers be doing? What should they bring or know?"
+            placeholder="Anything else volunteers should know about this event?"
           />
         </Field>
 
@@ -375,7 +413,7 @@ export default function PostOpportunity() {
             </select>
           </Field>
 
-          <Field label="Location">
+          <Field label="Town">
             <input
               type="text"
               className={inputClass}
@@ -385,6 +423,27 @@ export default function PostOpportunity() {
             />
           </Field>
         </div>
+
+        <Field label="Street address">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.address}
+            onChange={(e) => set('address', e.target.value)}
+            placeholder="123 Main St"
+            autoComplete="street-address"
+          />
+        </Field>
+
+        <Field label="Floor / room / building (optional)">
+          <input
+            type="text"
+            className={inputClass}
+            value={form.address_detail}
+            onChange={(e) => set('address_detail', e.target.value)}
+            placeholder="2nd floor · Community Room"
+          />
+        </Field>
 
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Start date & time">
@@ -406,14 +465,97 @@ export default function PostOpportunity() {
           </Field>
         </div>
 
-        <Field label="Open spots" hint="How many volunteers can sign up?">
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Volunteers arrive by (optional)"
+            hint="If volunteers must show up before the event starts — set-up, briefing, etc. Leave blank if arrival = start time."
+          >
+            <input
+              type="datetime-local"
+              className={inputClass}
+              value={form.arrive_by}
+              onChange={(e) => set('arrive_by', e.target.value)}
+            />
+          </Field>
+
+          <Field label="Open spots" hint="How many volunteers can sign up?">
+            <input
+              type="number"
+              min="1"
+              max="500"
+              className={inputClass}
+              value={form.spots}
+              onChange={(e) => set('spots', e.target.value)}
+            />
+          </Field>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Day-of supervisor" hint="The person volunteers report to when they arrive.">
+            <input
+              type="text"
+              className={inputClass}
+              value={form.supervisor_name}
+              onChange={(e) => set('supervisor_name', e.target.value)}
+              placeholder="Geovanna Lacerra"
+              autoComplete="name"
+            />
+          </Field>
+
+          <Field label="Supervisor phone" hint="Parents can call this number with questions.">
+            <input
+              type="tel"
+              className={inputClass}
+              value={form.supervisor_phone}
+              onChange={(e) => set('supervisor_phone', e.target.value)}
+              placeholder="(914) 555-0100"
+              autoComplete="tel"
+            />
+          </Field>
+        </div>
+
+        <Field label="What to wear or bring (optional)">
           <input
-            type="number"
-            min="1"
-            max="500"
+            type="text"
             className={inputClass}
-            value={form.spots}
-            onChange={(e) => set('spots', e.target.value)}
+            value={form.what_to_bring}
+            onChange={(e) => set('what_to_bring', e.target.value)}
+            placeholder="Closed-toe shoes, water bottle, sunscreen"
+          />
+        </Field>
+
+        <div className="space-y-3 rounded-2xl border border-ink-100 bg-ink-50/60 px-4 py-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-ink-300 accent-primary-600"
+              checked={form.food_provided}
+              onChange={(e) => set('food_provided', e.target.checked)}
+            />
+            <span className="text-sm text-ink-700">Food will be provided for volunteers</span>
+          </label>
+          {form.food_provided && (
+            <Field label="Food sponsored by (optional)">
+              <input
+                type="text"
+                className={inputClass}
+                value={form.food_sponsor}
+                onChange={(e) => set('food_sponsor', e.target.value)}
+                placeholder="Mahopac Pizza Co."
+              />
+            </Field>
+          )}
+        </div>
+
+        <Field
+          label="Physical requirements / accessibility notes (optional)"
+          hint='e.g. "Involves standing for 3+ hours, lifting up to 20 lbs" or "All tasks are seated."'
+        >
+          <input
+            type="text"
+            className={inputClass}
+            value={form.accessibility_notes}
+            onChange={(e) => set('accessibility_notes', e.target.value)}
           />
         </Field>
 
